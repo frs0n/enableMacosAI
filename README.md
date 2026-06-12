@@ -54,6 +54,20 @@ sudo ./install.sh uninstall   # 卸载,恢复原始区域
    AMFI 一关,SEP 会拒绝给 Private Cloud Compute 出硬件证明(日志表现为
    `AppleKeyStore kIOReturnNotPermitted`),**云端 AI 全部失效**;端侧仍可用。
 3. kext 首次加载需在 **系统设置 → 隐私与安全性** 里点 **Allow** 后重启。
+4. **Apple 账户「媒体与购买项目」地区必须是 Apple 智能支持区(不能是中国/CN)** —— 改成
+   美国 / 日本等(系统设置 → 顶部你的名字 → 媒体与购买项目 → 管理 → 国家/地区)。
+5. **系统语言 == Siri 语言,且为 Apple 智能支持的语言** —— 最稳是两者都设成 English (US)。
+
+> ⚠️ **kext 只负责"区域"这一项。** GREYMATTER 资格要 ~10 个输入(区域、账户地区、语言匹配、
+> 设备类型……)**全部满足**才会变 4。若装好后 `region=LL/A` 和 kext 都已就位、但 `GREYMATTER`
+> 仍是 `2`,八成卡在**账户地区或语言**上。跑这条看是哪一项没过(值为 `2` 的就是它):
+>
+> ```bash
+> sudo /usr/libexec/PlistBuddy -c "Print :OS_ELIGIBILITY_DOMAIN_GREYMATTER:status" \
+>   /private/var/db/eligibilityd/eligibility.plist
+> ```
+>
+> 改完对应设置后,`sudo launchctl kickstart -k system/com.apple.eligibilityd` 或重启即可。
 
 ## 手动安装(可选)
 
@@ -73,6 +87,57 @@ ioreg -ard1 -c IOPlatformExpertDevice | plutil -p - | grep region-info
 # GREYMATTER 资格应为 4 (eligible)
 sudo /usr/libexec/PlistBuddy -c 'Print :OS_ELIGIBILITY_DOMAIN_GREYMATTER:os_eligibility_answer_t' \
   /private/var/db/eligibilityd/eligibility.plist
+```
+
+## 故障排查
+
+### `region=LL/A` 和 kext 都已就位,但 `GREYMATTER` 仍是 `2`
+
+区域只是 ~10 个资格输入之一,八成卡在**账户地区或语言**(见上方「前置条件」第 4/5 条)。
+跑这条看哪一项没过(值为 `2` 的就是它),改完对应设置后 `sudo launchctl kickstart -k
+system/com.apple.eligibilityd` 或重启:
+
+```bash
+sudo /usr/libexec/PlistBuddy -c "Print :OS_ELIGIBILITY_DOMAIN_GREYMATTER:status" \
+  /private/var/db/eligibilityd/eligibility.plist
+```
+
+### kext 没加载(`region` 仍是 CH)
+
+- **SIP 没关** → `csrutil status` 须为 disabled;没关就回恢复模式 `csrutil disable`;
+- **没批准** → `kmutil load -p` 报 not approved → 系统设置 → 隐私与安全性 → **Allow** → 重启;
+- **`Authenticating extension failed: Bad code signature`** → 你处于 Reduced Security(部分关 SIP),
+  ad-hoc kext 不放行;**必须 Permissive(完整关 SIP)**,想 SIP-on 则需 Developer-ID 正经签名;
+- **系统版本差异** → 太新/太旧的 macOS 可能验签或 KPI 不符,需用 `BUILD.md` 从源码重编。
+
+### PCC 云端功能报错(写作工具语气改写 / 图乐园 / Reframe 等)
+
+**端侧(校对/摘要/Genmoji)不受影响。** PCC 出问题先看日志定位,**别连环点**——每次失败都可能触发
+Apple 后端限流,越点越坏:
+
+```bash
+sudo log show --last 3m --predicate 'process == "privatecloudcomputed"' 2>/dev/null \
+  | grep -iE 'finished successfully|3200[0-9]|RetryAfter|NWError|3205[0-9]|Insufficient inline|32080' | tail -15
+```
+
+| 日志特征 | 含义 | 解法 |
+|---|---|---|
+| `Ropes request finished successfully` | ✅ 正常 | — |
+| `32001` + `RetryAfterDate` | 被 Apple 限流(请求太频繁/失败太多) | **停手**,等几小时 / 过夜 |
+| `Insufficient inline attestations` / `32080` | 证明池陈旧或没热 | 见下方**重置证明池** |
+| `32057` + `NWError` / 大量 `cancelled` | 网络到 Apple 中继不通 | 换**支持区**网络(美/日节点或直连),别用香港等非支持区 |
+
+> 另外:PCC 还要求 **AMFI 开启**(前置条件第 2 条)。"Internet Connection Required" 多半也是上面这些(不是真没网)。
+
+**重置证明池**(`Insufficient` / 反复折腾后 PCC 一直 flaky 时的杀手锏):
+
+```bash
+# 1) 先定位证明库(趁 daemon 还活着;容器 UUID 各机不同)
+DIR="$(sudo lsof -c privatecloudcomputed -Fn 2>/dev/null | sed -n 's/^n//p' | grep -m1 -oE '.*/attestationstore_v3')"
+# 2) 停 daemon → 删陈旧证明库 + 收到的节点缓存
+sudo launchctl kill KILL system/com.apple.privatecloudcomputed
+sudo rm -f "$DIR"/db.sqlite* "$(dirname "$DIR")"/nodesReceived.log
+# 3) 重启,然后晾 15~30 分钟让它联网重建一池干净证明,再试(别马上猛点)
 ```
 
 ## 卸载
