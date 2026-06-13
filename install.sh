@@ -180,10 +180,70 @@ do_status(){
   [ "${1:-}" = "quiet" ] || hr
 }
 
+# ───────── 诊断报告(报 issue 用;纯文本,无颜色,方便整段复制)─────────
+do_diagnose(){
+  local osv osb model csr ba region gm kb hum
+  echo "════════════════ RegionSpoof 诊断报告 ════════════════"
+  echo "（把从上面这行 ═ 到最底下 ═ 的整段，原样贴进 GitHub issue）"
+  echo
+
+  osv="$(sw_vers -productVersion 2>/dev/null)"; osb="$(sw_vers -buildVersion 2>/dev/null)"
+  model="$(sysctl -n hw.model 2>/dev/null)"
+  echo "## 系统"
+  echo "  macOS : ${osv:-?} (${osb:-?})"
+  echo "  机型  : ${model:-?}  ($(uname -m))"
+  echo
+
+  echo "## 安全状态"
+  echo "  SIP   : $(sip_off && echo '已关 disabled（正确）' || echo '⚠️ 未完全关闭——ad-hoc kext 加载不了')"
+  csr="$(csrutil status 2>/dev/null)"; printf '%s\n' "$csr" | sed 's/^/        /'
+  if amfi_off; then echo "  AMFI  : ⚠️ 关闭——PCC 云端必失效！boot-args 里有 amfi_get_out_of_my_way，删掉它"
+  else echo "  AMFI  : 启用（正确，PCC 可用）"; fi
+  ba="$(nvram boot-args 2>/dev/null | sed 's/^boot-args[[:space:]]*//')"; [ -z "$ba" ] && ba='(空)'
+  echo "  boot-args: $ba"
+  echo
+
+  echo "## 区域 & kext"
+  region="$(ioreg -ard1 -c IOPlatformExpertDevice 2>/dev/null | plutil -p - 2>/dev/null | grep -i region-info | head -1 | sed 's/^ *//')"
+  echo "  region-info: ${region:-未读到}"
+  echo "    (含 4c4c2f41 = \"LL/A\" 美版✅ ；43482f41 = \"CH/A\" 国行❌，说明 kext 没生效)"
+  echo "  kext 已加载: $(kext_loaded && echo '是 ✅' || echo '否 ❌')"
+  echo
+
+  echo "## 资格 GREYMATTER（4=已开启，2=未开启）"
+  gm="$(greymatter)"
+  echo "  answer = ${gm:-未读到}  $([ "$gm" = "4" ] && echo '✅ 已开启' || echo '❌ 没到 4，AI 没真正打开')"
+  echo "  逐项输入状态（值为 2 的那一项 = 没过、就是它卡住的）:"
+  /usr/libexec/PlistBuddy -c "Print :OS_ELIGIBILITY_DOMAIN_GREYMATTER:status" "$ELIG" 2>/dev/null \
+    | sed 's/^/    /' || echo "    (读不到——eligibilityd 还没算出来，或路径有变)"
+  echo
+
+  echo "## 模型资产（端侧+云端都得先下完这些）"
+  kb="$( { find /System/Library/AssetsV2 -maxdepth 1 -type d \
+           \( -iname '*Generative*' -o -iname '*UAF_FM*' -o -iname '*Visual*' -o -iname '*CodeLM*' -o -iname '*ModelCatalog*' \) \
+           -print0 2>/dev/null | xargs -0 du -sk 2>/dev/null; } | awk '{s+=$1} END{print s+0}')"
+  if [ "${kb:-0}" -gt 0 ] 2>/dev/null; then
+    hum="$(awk -v k="$kb" 'BEGIN{printf "%.1f", k/1024/1024}')"
+    echo "  AI 模型总大小: ~${hum}G  （下全约 30G+；明显偏小 = 还在下载，等它下完）"
+  else
+    echo "  AI 模型总大小: 0 / 未找到 —— 还没下完，或被文件系统保护挡住（部分关 SIP 时会这样）"
+  fi
+  echo
+
+  echo "## PCC 云端日志（近 3 分钟；只关系语气改写/图乐园/Reframe，端侧功能跟它无关）"
+  { log show --last 3m --predicate 'process == "privatecloudcomputed"' 2>/dev/null \
+      | grep -iE 'finished successfully|3200[0-9]|RetryAfter|NWError|3205[0-9]|Insufficient inline|32080' \
+      | tail -8 | sed 's/^/  /'; } || true
+  echo "  （出现 'Ropes request finished successfully' = 云端正常；32001+RetryAfter = 被限流，停手等几小时）"
+  echo
+  echo "════════════════ 诊断报告结束 ════════════════"
+}
+
 # ───────── 入口 ─────────
 case "${1:-install}" in
   install)        do_install ;;
   uninstall|remove) do_uninstall ;;
   status|verify|doctor) do_status ;;
-  *) echo "用法: sudo $0 [install|status|uninstall]"; exit 1 ;;
+  diagnose|report|log) do_diagnose ;;
+  *) echo "用法: sudo $0 [install|status|diagnose|uninstall]"; exit 1 ;;
 esac

@@ -1,0 +1,58 @@
+name: 功能用不了 / 装不上
+description: Apple 智能装好后某项功能用不了，或 kext 装不上
+title: "[问题] "
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **开 issue 前，请先读一遍 [README 的「故障排查」](https://github.com/SkyBlue997/enableMacosAI#故障排查)。**
+        大多数情况（旧 Siri、写作工具用不了、`GREYMATTER` 还是 2、kext 装不上、PCC 报错）那里都有现成答案。
+
+        自查后仍没解决，再按下面填。**没有诊断输出的 issue 很难定位，可能不会被处理。**
+  - type: checkboxes
+    attributes:
+      label: 开始之前
+      options:
+        - label: 我已经读过 README 的「故障排查」并照着试过了
+          required: true
+        - label: 我的 SIP 已关闭（恢复模式里 `csrutil disable`），且 boot-args 里没有 `amfi_get_out_of_my_way`
+          required: true
+  - type: textarea
+    id: diagnose
+    attributes:
+      label: 诊断输出（必填）
+      description: |
+        在项目目录里运行下面这条，把**整段输出**原样粘贴到这里（它不含任何隐私信息）：
+        ```bash
+        sudo ./install.sh diagnose
+        ```
+      render: text
+      placeholder: |
+        ════════════════ RegionSpoof 诊断报告 ════════════════
+        ...把 diagnose 的整段输出贴这里...
+        ════════════════ 诊断报告结束 ════════════════
+    validations:
+      required: true
+  - type: dropdown
+    id: feature
+    attributes:
+      label: 哪一项有问题
+      options:
+        - kext 装不上 / region 仍是 CH
+        - Apple 智能整个没开（旧 Siri、GREYMATTER 不是 4）
+        - 写作工具——校对/摘要等端侧基础项
+        - 写作工具语气改写 / 图乐园 / Reframe（PCC 云端）
+        - 邮件总结 / 通知摘要
+        - 新版对话 Siri（New Siri / 等候名单）
+        - 其他
+    validations:
+      required: true
+  - type: textarea
+    id: detail
+    attributes:
+      label: 具体现象
+      description: 你点了什么、期望什么、实际报什么错？可以拖图片进来。
+      placeholder: 例如：在「邮件」里点摘要，提示 "Unable to summarize this message"。
+    validations:
+      required: true

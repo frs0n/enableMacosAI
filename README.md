@@ -18,6 +18,7 @@ sudo ./install.sh
 
 ```bash
 sudo ./install.sh status      # 体检:SIP / AMFI / region / kext / 资格 一览
+sudo ./install.sh diagnose    # 一键诊断:把所有关键状态打成一段纯文本(报 issue 直接贴这个)
 sudo ./install.sh uninstall   # 卸载,恢复原始区域
 ```
 
@@ -90,6 +91,10 @@ sudo /usr/libexec/PlistBuddy -c 'Print :OS_ELIGIBILITY_DOMAIN_GREYMATTER:os_elig
 ```
 
 ## 故障排查
+
+> **拿不准卡在哪,先跑一键诊断:** `sudo ./install.sh diagnose` —— 它把 SIP / AMFI / region / kext /
+> GREYMATTER 逐项 / 模型大小 / PCC 日志一次性打成一段纯文本,对照下面各节即可定位。**提 issue 时也请直接贴这段输出**
+> (无隐私信息),否则很难帮你诊断。
 
 ### `region=LL/A` 和 kext 都已就位,但 `GREYMATTER` 仍是 `2`
 

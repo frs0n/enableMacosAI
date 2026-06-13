@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 先看「故障排查」（八成这里就解决了）
+    url: https://github.com/SkyBlue997/enableMacosAI#故障排查
+    about: 旧 Siri、写作工具用不了、GREYMATTER=2、kext 装不上、PCC 报错——都先在这里对照一遍。
