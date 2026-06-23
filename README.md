@@ -23,6 +23,7 @@ sudo ./install.sh uninstall   # 卸载,恢复原始区域
 ```
 
 > 前提:SIP 已关闭(恢复模式里 `csrutil disable`)。脚本若检测到未关,会给出分步指引。
+> SIP在macOS 27 beta 1可能无法关闭，请升级macOS 27 beta 2。
 
 ## 原理
 
